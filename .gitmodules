@@ -3,4 +3,4 @@
 	url = https://github.com/databricks/zerobus-sdk
 [submodule ".cursor"]
 	path = .cursor
-	url = /Users/robert.lee/github/cursor-config
+	url = https://github.com/rsleedbx/skills
