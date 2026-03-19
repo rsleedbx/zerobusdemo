@@ -1,0 +1,20 @@
+# Core ZeroBus SDK (install from Databricks distribution)
+# databricks-zerobus-ingest-sdk
+
+# Databricks SDK (auth, WorkspaceClient)
+databricks-sdk>=0.20.0
+
+# Protobuf / gRPC toolchain
+grpcio-tools>=1.60.0
+protobuf>=4.25.0
+
+# Schema / DDL transpiler (statschema — bundled under src/statschema until PyPI publication)
+sqlglot>=25.0.0
+pyyaml>=6.0
+
+# Spark (required for ingest_dataframe and protobuf_converter end-to-end tests)
+pyspark>=3.5.0
+
+# Dev / test
+pytest>=8.0.0
+pytest-mock>=3.12.0

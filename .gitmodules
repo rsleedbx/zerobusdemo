@@ -1,0 +1,3 @@
+[submodule "zerobus-sdk"]
+	path = zerobus-sdk
+	url = https://github.com/databricks/zerobus-sdk
