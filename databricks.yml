@@ -5,6 +5,12 @@
 bundle:
   name: zerobus
 
+permissions:
+  - user_name: robert.lee@databricks.com
+    level: CAN_MANAGE
+  - group_name: users
+    level: CAN_VIEW
+
 sync:
   include:
     - notebooks/**
@@ -15,8 +21,7 @@ targets:
     default: true
     workspace:
       host: https://e2-demo-field-eng.cloud.databricks.com
-  ## Optionally, there could be 'staging' or 'prod' targets here.
-  #
-  # prod:
-  #   workspace:
-  #     host: https://e2-dogfood.staging.cloud.databricks.com
+  azurefe:
+    mode: development
+    workspace:
+      host: https://adb-984752964297111.11.azuredatabricks.net
