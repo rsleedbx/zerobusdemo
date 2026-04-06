@@ -1,6 +1,6 @@
 # How do I create a Service Principal for ZeroBus authentication?
 
-`client_id` and `client_secret` are OAuth M2M credentials for a Databricks Service Principal. Creating them requires workspace admin.
+`ZEROBUS_APP_ID` and `ZEROBUS_OAUTH_SECRET` are OAuth M2M credentials for a Databricks Service Principal. Creating them requires workspace admin.
 
 > Replace `DEFAULT` with your profile name if using a named profile in `~/.databrickscfg`.
 
@@ -10,34 +10,43 @@
 
 ```bash
 SP_JSON=$(databricks service-principals create \
-  --display-name "my-zerobus-sp" \
+  --display-name "robert_lee_zerobus_sp" \
   --json '{}' \
   --profile DEFAULT \
   --output json)
 
-CLIENT_ID=$(echo "$SP_JSON" | jq -r '.applicationId')
+APP_ID=$(echo "$SP_JSON" | jq -r '.applicationId')
 SP_ID=$(echo "$SP_JSON" | jq -r '.id')
 
-echo "client_id: $CLIENT_ID"
-echo "numeric id (needed for step 2): $SP_ID"
+echo "ZEROBUS_APP_ID: $APP_ID"
+echo "ZEROBUS_SERVICE_PRINCIPAL_ID (numeric, needed for step 2): $SP_ID"
 ```
 
-`applicationId` is a UUID — this is `DATABRICKS_CLIENT_ID`.
+`applicationId` is a UUID — this is `ZEROBUS_APP_ID`, passed to `create_stream`.
 `id` is a numeric value used only to create the secret in step 2.
+
+> **Note:** display names are not unique. Multiple SPs can share the same name.
+> Use `ZEROBUS_APP_ID` (the UUID) as the stable identifier.
 
 ---
 
-## Step 2 — Create the secret
+## Step 2 — Create the OAuth secret
 
 ```bash
-CLIENT_SECRET=$(databricks service-principal-secrets-proxy create $SP_ID \
+OAUTH_SECRET=$(databricks service-principal-secrets-proxy create $SP_ID \
   --profile DEFAULT \
   --output json | jq -r '.secret')
 
-echo "client_secret: $CLIENT_SECRET"
+echo "ZEROBUS_OAUTH_SECRET: $OAUTH_SECRET"
 ```
 
-The `secret` value is returned once. Store it before closing the terminal.
+The `secret` value is returned **once**. Store it before closing the terminal.
+
+> **Quota:** each SP is limited to **5 OAuth secrets**. Delete unused secrets with:
+> ```bash
+> databricks service-principal-secrets-proxy list $SP_ID --output json
+> databricks service-principal-secrets-proxy delete $SP_ID <secret_id>
+> ```
 
 ---
 
@@ -45,27 +54,46 @@ The `secret` value is returned once. Store it before closing the terminal.
 
 ```bash
 SP_JSON=$(databricks service-principals create \
-  --display-name "my-zerobus-sp" \
+  --display-name "robert_lee_zerobus_sp" \
   --json '{}' \
   --profile DEFAULT \
   --output json)
 
-CLIENT_ID=$(echo "$SP_JSON" | jq -r '.applicationId')
+APP_ID=$(echo "$SP_JSON" | jq -r '.applicationId')
 SP_ID=$(echo "$SP_JSON" | jq -r '.id')
 
-CLIENT_SECRET=$(databricks service-principal-secrets-proxy create $SP_ID \
+# Fallback: look up SP_ID from APP_ID if create returned empty id
+if [[ -z "$SP_ID" || "$SP_ID" == "null" ]]; then
+    SP_ID=$(databricks service-principals list \
+      --filter "applicationId eq $APP_ID" \
+      --output json | jq -r '.[0].id')
+fi
+
+OAUTH_SECRET=$(databricks service-principal-secrets-proxy create "$SP_ID" \
   --profile DEFAULT \
   --output json | jq -r '.secret')
 
-echo "export DATABRICKS_CLIENT_ID=$CLIENT_ID"
-echo "export DATABRICKS_CLIENT_SECRET=$CLIENT_SECRET"
+echo "ZEROBUS_SERVICE_PRINCIPAL_ID=$SP_ID"
+echo "ZEROBUS_APP_ID=$APP_ID"
+echo "ZEROBUS_OAUTH_SECRET=$OAUTH_SECRET"
+
+# Write to config.json — creates the file if it does not exist
+CONFIG_FILE="config.json"
+EXISTING=$(cat "$CONFIG_FILE" 2>/dev/null || echo '{}')
+echo "$EXISTING" \
+  | jq --arg sp  "$SP_ID" \
+       --arg id  "$APP_ID" \
+       --arg sec "$OAUTH_SECRET" \
+       '.ZEROBUS_SERVICE_PRINCIPAL_ID=$sp | .ZEROBUS_APP_ID=$id | .ZEROBUS_OAUTH_SECRET=$sec' \
+  > "$CONFIG_FILE"
+echo "Written to $CONFIG_FILE"
 ```
 
 ---
 
 ## Grant table permissions
 
-The target table must exist before permissions can be granted. If the schema or table does not exist yet, create them first:
+The target table must exist before permissions can be granted. Create schema and table first if needed:
 
 ```sql
 CREATE SCHEMA IF NOT EXISTS <catalog.schema>;
@@ -74,35 +102,49 @@ CREATE TABLE IF NOT EXISTS <catalog.schema.table> (
 );
 ```
 
-Then grant `MODIFY` and `SELECT` to the Service Principal:
+Then grant the required permissions to the Service Principal:
 
-**CLI:**
+```sql
+GRANT USE CATALOG ON CATALOG <catalog>          TO `<APP_ID>`;
+GRANT MODIFY, SELECT ON TABLE <catalog.schema.table> TO `<APP_ID>`;
+```
+
+**CLI equivalent:**
 ```bash
 databricks grants update TABLE <catalog.schema.table> \
   --profile DEFAULT \
   --json '{
     "changes": [{
-      "principal": "<applicationId>",
+      "principal": "<APP_ID>",
       "add": ["MODIFY", "SELECT"]
     }]
   }'
 ```
 
-**SQL:**
-```sql
-GRANT MODIFY, SELECT ON TABLE <catalog.schema.table>
-  TO `<applicationId>`;
+---
+
+## Validate credentials
+
+Before using in the notebook, confirm the credentials work against the OIDC token endpoint:
+
+```bash
+curl -s -X POST https://<workspace-url>/oidc/v1/token \
+  -d "grant_type=client_credentials" \
+  -d "client_id=$APP_ID" \
+  -d "client_secret=$OAUTH_SECRET" \
+  -d "scope=all-apis" | jq .
 ```
+
+A `200` response with `access_token` confirms the credentials are valid.
 
 ---
 
-## Export for ZeroBus
+## config.json keys
 
-```bash
-export DATABRICKS_CLIENT_ID="<applicationId from step 1>"
-export DATABRICKS_CLIENT_SECRET="<secret from step 2>"
-```
-
-These are the values passed to `ZerobusSdk.create_stream(client_id, client_secret, ...)` or read by `IngestConfig.from_env()`.
+| Key | Description |
+|-----|-------------|
+| `ZEROBUS_APP_ID` | UUID `applicationId` — passed as `client_id` to `create_stream` |
+| `ZEROBUS_OAUTH_SECRET` | OAuth secret — passed as `client_secret` to `create_stream` |
+| `ZEROBUS_SERVICE_PRINCIPAL_ID` | Numeric SP resource ID — used to manage secrets |
 
 *[← Back to FAQ index](../zerobus_faq.md)*

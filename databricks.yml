@@ -5,6 +5,10 @@
 bundle:
   name: zerobus
 
+sync:
+  include:
+    - notebooks/**
+
 targets:
   e2demo:
     mode: development
