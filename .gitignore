@@ -1,1 +1,9 @@
 *
+
+# Allow committed OTEL secret bootstrap template (no credentials in repo)
+!notebooks/
+!notebooks/otel/
+!notebooks/otel/secrets-bootstrap.ipynb
+
+# Local-only notebooks (secrets); never commit
+notebooks/otel/secrets-bootstrap.local.ipynb
