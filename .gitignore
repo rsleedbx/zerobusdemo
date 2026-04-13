@@ -4,6 +4,9 @@
 !notebooks/
 !notebooks/zerobus_service_principal.ipynb
 !notebooks/zerobus-ingest-docs.ipynb
+!notebooks/zerobus_grpc_async.ipynb
+!notebooks/zerobus_grpc_sync.ipynb
+!notebooks/zerobus_http_sync.ipynb
 !notebooks/otel/
 !notebooks/otel/grafana/
 !notebooks/otel/grafana/secrets-bootstrap.ipynb

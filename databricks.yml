@@ -29,8 +29,10 @@ targets:
     mode: development
     workspace:
       host: https://416411475796958.8.gcp.databricks.com
-  # Host is not set here — it comes from the [gcprslee] profile in ~/.databrickscfg (not in git).
+  # OAuth / tokens: [gcprslee] in ~/.databrickscfg (not in git). For GCP, workspace.host here must be
+  # the numeric URL https://<workspace_id>.<shard>.gcp.databricks.com — required for bundle / VS Code.
   gcprslee:
     mode: development
     workspace:
+      host: https://8259565162423548.8.gcp.databricks.com
       profile: gcprslee
