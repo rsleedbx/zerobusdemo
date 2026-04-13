@@ -2,8 +2,22 @@
 
 # Allow committed OTEL secret bootstrap template (no credentials in repo)
 !notebooks/
+!notebooks/zerobus_service_principal.ipynb
+!notebooks/zerobus-ingest-docs.ipynb
 !notebooks/otel/
-!notebooks/otel/secrets-bootstrap.ipynb
+!notebooks/otel/grafana/
+!notebooks/otel/grafana/secrets-bootstrap.ipynb
+!notebooks/otel/grafana/zerobus_otel_lab.py
+!notebooks/otel/grafana/zerobus-otel.ipynb
+!notebooks/otel/uc/
+!notebooks/otel/uc/zerobus_uc_otel_lab.py
+!notebooks/otel/uc/zerobus-uc-otel.ipynb
+!notebooks/otel/jaeger/
+!notebooks/otel/jaeger/jaeger.sh
+!notebooks/otel/jaeger/setup-jaeger-podman.md
+
+!docs/
+!docs/zerobus-ingest-otel-uc.md
 
 # Local-only notebooks (secrets); never commit
-notebooks/otel/secrets-bootstrap.local.ipynb
+notebooks/otel/grafana/secrets-bootstrap.local.ipynb

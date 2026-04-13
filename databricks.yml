@@ -25,3 +25,12 @@ targets:
     mode: development
     workspace:
       host: https://adb-984752964297111.11.azuredatabricks.net
+  gcpfe:
+    mode: development
+    workspace:
+      host: https://416411475796958.8.gcp.databricks.com
+  # Host is not set here — it comes from the [gcprslee] profile in ~/.databrickscfg (not in git).
+  gcprslee:
+    mode: development
+    workspace:
+      profile: gcprslee
