@@ -1,199 +1,117 @@
 ---
 name: zerobus-ingest
-description: Implement and test Databricks ZeroBus Ingest — stream Protobuf-serialized rows into Unity Catalog Delta tables via the ZeroBus gRPC SDK. Use when adding ZeroBus ingest code, configuring auth (SDK or service principal), setting the server endpoint, writing tests for ingest logic, or debugging ZeroBus connection and auth errors.
+description: ZeroBus ingest patterns specific to the zerobusdemo repo — notebook cell structure (4a singles / 4b batch / 4c visibility / 4d metrics), benchmark configuration, DemoAckCallback, zbhelper module layout, and Unity Catalog table naming conventions used here. Use when editing or adding to the zerobusdemo notebooks or zbhelper library, or when the user asks about the demo structure, timing metrics, or batch run configuration.
 ---
 
-# ZeroBus Ingest
+# ZeroBus Ingest — zerobusdemo specifics
 
-ZeroBus is a Databricks serverless gRPC ingestion API that writes Protobuf-encoded records directly into Unity Catalog Delta tables at high throughput.
-
-## Where the code lives
-
-ZeroBus helpers were moved out of **statschema** into **[zerobusdemo](https://github.com/rsleedbx/zerobusdemo)**.
-
-| File (in zerobusdemo) | Role |
-|------|------|
-| `src/zbhelper/zerobus_ingest.py` | `IngestConfig`, `ingest_dataframe`, `build_zerobus_endpoint` |
-| `src/zbhelper/protobuf_converter.py` | Schema → `.proto` → compiled message class → bytes |
-| `tests/test_zerobus_ingest.py` | Unit + integration tests |
-
-Canonical schema types come from `src/statschema/model.py` in that repo (bundled copy of statschema).
+For general ZeroBus auth, endpoint, HTTP, and gRPC patterns, see the global `databricks-zerobus` skill.
 
 ---
 
-## Server Endpoint
-
-The ZeroBus endpoint is deterministically derived from the workspace hostname — no region or external configuration needed:
-
-```
-https://{workspace_id}.zerobus.{workspace_hostname}
-```
-
-Example:
-```
-workspace:  https://e2-dogfood.staging.cloud.databricks.com
-zerobus:    https://6051921418418893.zerobus.e2-dogfood.staging.cloud.databricks.com
-```
-
-`from_workspace_client()` auto-constructs this endpoint using `w.get_workspace_id()` and `w.config.hostname` from `~/.databrickscfg`. No extra configuration needed.
-
-### Endpoint resolution order in `from_workspace_client`
-
-1. `server_endpoint=` argument (explicit override)
-2. `ZEROBUS_SERVER_ENDPOINT` env var
-3. Auto-constructed from workspace SDK config
-
-### `build_zerobus_endpoint` utility
+## Table naming (this repo)
 
 ```python
-from src.zbhelper.zerobus_ingest import build_zerobus_endpoint
-
-endpoint = build_zerobus_endpoint()
-print(endpoint)  # https://6051921418418893.zerobus.e2-dogfood.staging.cloud.databricks.com
+TABLE_NAME = f"{CATALOG}.{SCHEMA}.{TABLE}"  # e.g. main.robert_lee.airquality_grpc_sync
 ```
+
+Each notebook uses a distinct table name suffix: `airquality_grpc_sync`, `airquality_grpc_async`, `airquality_http_sync`, `airquality_http_async`.
 
 ---
 
-## Table Name
+## Demo notebook structure (4 steps)
 
-The table name passed to `IngestConfig` must be fully qualified: `catalog.schema.table`.
+All four notebooks (`grpc_sync`, `grpc_async`, `http_sync`, `http_async`) share the same cell layout:
 
-Use `build_qualified_table_name` to construct it automatically:
+| Cell | Name | Purpose |
+|---|---|---|
+| 18 | Setup | Config, session/stream open, `_n`, `_singles`, `_batch_runs` |
+| 20 | 4a singles | `_singles` individual inserts; captures `_row_send_seconds`, `_row_wait_seconds` |
+| 22 | 4b batch | `_batch_runs` consecutive batch sends; captures `_batch_run_seconds` list |
+| 24 | 4c visibility | Poll `COUNT(*)` until `_target_count`; compute `_visibility_s` and `_visibility_from_first_send_s` |
+| 26 | 4d key metrics | Print all timings with min/mean/median/max distributions |
+
+### Key config variables (cell 18)
 
 ```python
-from src.zbhelper.zerobus_ingest import build_qualified_table_name
-
-# Bare table name — derives schema from current user email (robert.lee@ -> robert_lee)
-fqn = build_qualified_table_name("orders")
-# -> "main.robert_lee.orders"
-
-# Already qualified — returned unchanged
-fqn = build_qualified_table_name("main.default.orders")
-# -> "main.default.orders"
-
-# Explicit overrides
-fqn = build_qualified_table_name("orders", catalog="dev", schema="myschema")
-# -> "dev.myschema.orders"
+_n = 1000           # total rows per run
+_singles = min(10, _n)  # rows sent individually in 4a
+_batch_runs = 10    # consecutive batch sends in 4b (configurable)
 ```
 
-Schema derivation: `robert.lee@databricks.com` → `robert_lee` (strip domain, replace `.` and `-` with `_`). Falls back to `default` if SDK call fails.
-
----
-
-## Authentication
-
-### SDK auth (local dev — recommended)
-
-Uses `~/.databrickscfg` — same credentials as Databricks Connect. No service principal needed. Endpoint and table name are both auto-constructed.
+### Timing variables (cells 20–24)
 
 ```python
-from src.zbhelper.zerobus_ingest import IngestConfig, ingest_dataframe, build_qualified_table_name
-
-table_fqn = build_qualified_table_name("orders")   # main.robert_lee.orders
-config = IngestConfig.from_workspace_client(table_fqn)
-
-# Short-lived PAT (auto-expires; useful for tests)
-config = IngestConfig.from_workspace_client(table_fqn, lifetime_seconds=300)
+t_4a0               # perf_counter() at first single row send
+_singles_wall_s     # total wall time for all singles
+_row_send_seconds   # list[float]: per-row send duration
+_row_wait_seconds   # list[float]: per-row wait/ack duration (0.0 for HTTP)
+_batch_run_seconds  # list[float]: wall time per batch run
+_batch_send_seconds # list[float]: send portion per batch run
+_batch_wait_seconds # list[float]: wait portion per batch run (0.0 for HTTP)
+_total_rows_inserted = _singles + _batch_n * len(_batch_run_seconds)
+_ingest_4a4b_s = _singles_wall_s + sum(_batch_run_seconds)
+_t_after_close      # perf_counter() after stream.close() / last insert
+_visibility_s       # time from _t_after_close → COUNT(*) reached target
+_visibility_from_first_send_s  # time from t_4a0 → COUNT(*) reached target
 ```
 
-### Service principal auth (CI / production)
+### 4b distribution print (cell 26 — identical across all 4 notebooks)
 
 ```python
-# Requires env vars:
-# DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET,
-# ZEROBUS_SERVER_ENDPOINT, DATABRICKS_WORKSPACE_URL, ZEROBUS_TABLE_NAME
-config = IngestConfig.from_env()
-config = IngestConfig.from_env(table_name="main.default.my_table")
+if _batch_run_seconds and _batch_n:
+    print(
+        f"  4b ({_batch_n} batched, {len(_batch_run_seconds)} runs):"
+        f"  wall  min={min(_batch_run_seconds)*1000:.1f} ms"
+        f"  mean={mean(_batch_run_seconds)*1000:.1f} ms"
+        f"  median={median(_batch_run_seconds)*1000:.1f} ms"
+        f"  max={max(_batch_run_seconds)*1000:.1f} ms"
+    )
 ```
 
 ---
 
-## Ingesting a DataFrame
+## DemoAckCallback (gRPC notebooks)
 
 ```python
-from src.zbhelper.zerobus_ingest import ingest_dataframe
-from src.statschema.model import CanonicalTableSchema, CanonicalColumn
-
-table = CanonicalTableSchema(
-    name="orders",
-    columns=[
-        CanonicalColumn(name="order_id", type="integer"),
-        CanonicalColumn(name="amount", type="double"),
-    ],
-)
-
-result = ingest_dataframe(df, table, config)
-print(f"Ingested {result.rows_sent} rows in {result.batch_count} batches")
+class DemoAckCallback(AckCallback):
+    def on_ack(self, offset: int) -> None:
+        print(f"  [ack] offset={offset}")
+    def on_error(self, error: Exception) -> None:
+        print(f"  [ack-error] {error}")
 ```
 
-`ingest_dataframe` pipeline:
-1. `schema_to_proto_str(table)` → `.proto` string
-2. `compile_proto(proto_str, table.name)` → compiled message class
-3. `serialize_row(row, msg_class)` → `bytes` per row
-4. `stream.ingest_records_offset(batch)` per batch
-5. `stream.flush()` then `stream.close()` (always, even on exception)
-
-Default `batch_size` is 500. Override per call: `ingest_dataframe(df, table, config, batch_size=100)`.
+Passed to `sdk.create_stream(ack_callback=DemoAckCallback())`. Used in both `grpc_sync` and `grpc_async`.
 
 ---
 
-## Prerequisites
+## zbhelper module layout (`src/zbhelper/`)
 
-Before calling `ingest_dataframe`:
-1. Target Delta table must exist in Unity Catalog with matching column names.
-2. User (or service principal) needs `MODIFY` + `SELECT` on the table.
-3. `databricks-zerobus-ingest-sdk` must be installed (`requirements.txt`).
+| File | Role |
+|---|---|
+| `zerobus_ingest.py` | `IngestConfig`, `ingest_dataframe`, `build_zerobus_endpoint` |
+| `protobuf_converter.py` | Schema → `.proto` → compiled message class → bytes |
+| `ingest_benchmark.py` | Reusable benchmark functions for all 4 patterns |
+| `__init__.py` | Re-exports public API |
+
+Driver notebook: `notebooks/zerobus_benchmark_driver.ipynb`
 
 ---
 
-## Testing
+## HTTP session reuse (this repo's pattern)
 
-### Unit tests (no credentials, mock the SDK)
+gRPC and HTTP sessions are opened in cell 18 and closed at the end of cell 22. The token fetch for HTTP reuses the same `requests.Session` as the inserts — the session is warm by the time the first insert runs.
 
-ZeroBus SDK names are imported at module level in `zbhelper/zerobus_ingest.py` so `patch.multiple` can replace them. Also patch `build_zerobus_endpoint` to avoid real SDK calls:
+---
+
+## Visibility polling (cell 24 — identical across notebooks)
 
 ```python
-from unittest.mock import MagicMock, patch
-
-mock_stream = MagicMock()
-mock_stream.ingest_records_offset.side_effect = iter([1, 2, 3])
-mock_sdk_instance = MagicMock()
-mock_sdk_instance.create_stream_with_headers_provider.return_value = mock_stream
-
-class MockRecordType:
-    PROTO = "PROTO"
-
-with patch("src.zbhelper.zerobus_ingest._host_from_workspace_client", return_value="https://ws"), \
-     patch("src.zbhelper.zerobus_ingest.build_zerobus_endpoint", return_value="https://123.zerobus.ws.databricks.com"), \
-     patch.multiple("src.zbhelper.zerobus_ingest",
-         ZerobusSdk=MagicMock(return_value=mock_sdk_instance),
-         TableProperties=MagicMock(),
-         StreamConfigurationOptions=MagicMock(),
-         RecordType=MockRecordType):
-    config = IngestConfig.from_workspace_client("main.default.t")
-    result = ingest_dataframe(fake_df, table, config)
+_target_count = _row_before + _total_rows_inserted
+_poll_deadline = _t_after_close + 120.0
+while time.perf_counter() < _poll_deadline:
+    _row_visible = spark.sql(f"SELECT COUNT(*) AS c FROM {TABLE_NAME}").collect()[0]["c"]
+    if _row_visible >= _target_count:
+        break
+    time.sleep(0.15)
 ```
-
-### Integration tests
-
-Set env vars; the tests skip automatically when unset:
-
-```bash
-export ZEROBUS_SERVER_ENDPOINT=https://...   # optional — auto-constructed if unset
-export ZEROBUS_TABLE_NAME=main.default.my_table
-.venv_3_11/bin/python -m pytest tests/test_zerobus_ingest.py -k integration -v
-```
-
----
-
-## Common Pitfalls
-
-- **`HeadersProvider.__new__() takes 0 positional arguments`** — Rust Pyo3 `__new__` rejects forwarded args. Fix: `def __new__(cls, *a, **kw): return HeadersProvider.__new__(cls)`. Applied in `DatabricksSdkHeadersProvider`.
-
-- **`AttributeError: module has no attribute 'ZerobusSdk'` in mock** — ZeroBus imports must be at module level, not inside functions. Already fixed in `zbhelper/zerobus_ingest.py`.
-
-- **Rows ingested but not visible** — `flush()` must be called before `close()`. `ingest_dataframe` does this in a `finally` block.
-
-- **`ValueError: Protocol message has no field 'id'`** — `dbldatagen.withIdOutput()` adds an `id` column not in the schema. Fixed in `serialize_row`: only descriptor fields are set.
-
-- **Duplicate proto symbol in pytest** — multiple `compile_proto` calls collide in the descriptor pool. Fixed in `compile_proto`: unique counter suffix per compilation (`Table_0`, `Table_1`, …).
