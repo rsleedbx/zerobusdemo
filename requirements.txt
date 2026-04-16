@@ -1,25 +1,29 @@
-# Core ZeroBus SDK (install from Databricks distribution)
-databricks-zerobus-ingest-sdk
-
-# OpenTelemetry (notebooks/otel/grafana/zerobus-otel.ipynb)
-opentelemetry-api
-opentelemetry-sdk
-opentelemetry-instrumentation
-opentelemetry-exporter-otlp
-opentelemetry-instrumentation-grpc
-opentelemetry-instrumentation-requests
-
-# Databricks SDK (auth, WorkspaceClient)
+# Local development against Databricks (Databricks Connect / serverless)
+databricks-connect
 databricks-sdk>=0.20.0
 
-# Protobuf / gRPC toolchain
+# Protobuf / gRPC toolchain (zbhelper local imports)
 grpcio-tools>=1.60.0
 protobuf>=4.25.0
 
-# Schema / DDL transpiler (statschema — bundled under src/statschema until PyPI publication)
+# Schema / DDL transpiler (src/statschema)
 sqlglot>=25.0.0
 pyyaml>=6.0
+
+# HTTP async (zerobus_http_async.ipynb)
+aiohttp
+requests
 
 # Dev / test
 pytest>=8.0.0
 pytest-mock>=3.12.0
+
+# NOTE: databricks-zerobus-ingest-sdk is intentionally excluded.
+# It is a Rust-built package that cannot be installed locally (requires crates.io network access).
+# All notebooks install it on the cluster via: %pip install databricks-zerobus-ingest-sdk
+
+# NOTE: OpenTelemetry packages are excluded from the default requirements.
+# Install separately when working on OTel notebooks:
+#   pip install opentelemetry-api opentelemetry-sdk opentelemetry-instrumentation \
+#               opentelemetry-exporter-otlp opentelemetry-instrumentation-grpc \
+#               opentelemetry-instrumentation-requests
