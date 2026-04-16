@@ -1,5 +1,7 @@
-# Local development against Databricks (Databricks Connect / serverless)
-databricks-connect
+# Local development against Databricks
+# NOTE: databricks-connect is intentionally excluded.
+# The Databricks VS Code extension installs the correct version automatically
+# to match your cluster/runtime. Adding it here causes version mismatches.
 databricks-sdk>=0.20.0
 
 # Protobuf / gRPC toolchain (zbhelper local imports)
