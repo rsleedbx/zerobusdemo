@@ -22,6 +22,10 @@ Actual latency varies based on region alignment and workload. Best performance i
 
 To increase throughput, open **multiple parallel streams** to the same table. To raise the default quotas, contact your Databricks account representative.
 
+## Demo notebooks (`zerobus_grpc_async`, `zerobus_grpc_sync`, `zerobus_http_sync`)
+
+Step **4c** prints recap timing in **milliseconds** (UC visibility poll, ingest phase walls, payload bytes). The async gRPC notebook separates **submit** vs **wait-for-offset**; the sync gRPC and HTTP notebooks print the walls their pipelines measure (HTTP includes a throttled `COUNT(*)` poll for visibility).
+
 ---
 
 *[← Back to FAQ index](../zerobus_faq.md)*

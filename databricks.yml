@@ -36,3 +36,7 @@ targets:
     workspace:
       host: https://8259565162423548.8.gcp.databricks.com
       profile: gcprslee
+  dbxfree:
+    mode: development
+    workspace:
+      host: https://dbc-3c9e0417-0616.cloud.databricks.com/
