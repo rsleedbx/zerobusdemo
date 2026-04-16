@@ -26,7 +26,10 @@ from typing import Any
 
 _compile_counter = itertools.count()
 
-from statschema.model import CanonicalTableSchema
+try:
+    from statschema.model import CanonicalTableSchema
+except ImportError:
+    CanonicalTableSchema = None  # type: ignore[assignment,misc]
 
 _CANONICAL_TO_PROTO = {
     "integer": "int32",

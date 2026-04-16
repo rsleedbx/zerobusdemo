@@ -16,12 +16,9 @@ import sys
 from pathlib import Path
 
 # zbhelper lives in notebooks/ (co-located for workspace compat).
-# statschema lives in src/ (shared with scripts and tests).
-# Add both so pytest and submodules find them without path hacks.
-_root = Path(__file__).parent
-for _p in [_root / "notebooks", _root / "src"]:
-    if str(_p) not in sys.path:
-        sys.path.insert(0, str(_p))
+_notebooks = str(Path(__file__).parent / "notebooks")
+if _notebooks not in sys.path:
+    sys.path.insert(0, _notebooks)
 
 try:
     from dotenv import load_dotenv
