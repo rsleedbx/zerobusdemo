@@ -1,0 +1,13 @@
+---
+description: Validate CLI tools once at entry; prefer required dependencies and a single code path—avoid optional tools that force parallel branches.
+alwaysApply: true
+---
+
+# Prerequisites: check once; prefer required tools
+
+When adding or editing **shell** or **Python** entrypoints (scripts, CLIs, `if __name__ == "__main__"` blocks):
+
+1. **Probe each required external tool once** before branching on subcommands or modes (unless `help` must stay dependency-free).
+2. **Do not** repeat the same `command -v`, `which`, or `importlib` check in multiple `if` arms. Prefer **one global** `check_prerequisites` / `ensure_runtime` when subcommands share the same toolchain; split per-command checks only when dependencies are **disjoint**.
+3. **Prefer required dependencies** over optional ones: if a formatter, parser, or CLI makes the script materially simpler, **require it** and document it instead of maintaining two behaviors (with/without the tool).
+4. **Inline single-command wrappers** in shell/Python CLIs when a function’s body is one trivial line used once—see “Inline a single command” and prerequisites guidance in `.cursor/skills/shell-script-practices/SKILL.md`, and the DRY corollary in `.cursor/skills/python-best-practices/SKILL.md`.

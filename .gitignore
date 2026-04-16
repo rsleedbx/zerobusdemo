@@ -19,8 +19,27 @@
 !notebooks/otel/jaeger/jaeger.sh
 !notebooks/otel/jaeger/setup-jaeger-podman.md
 
+!.cursor/
+!.cursor/rules/
+!.cursor/rules/**
+!.cursor/skills/
+!.cursor/skills/**
+
 !docs/
 !docs/zerobus-ingest-otel-uc.md
+!docs/plan-external-managed-location-uc.md
+
+!scripts/
+!scripts/uctblextstorage/
+!scripts/uctblextstorage/**
+
+# Terraform local state and plugins under uctblextstorage
+scripts/uctblextstorage/terraform/.terraform/
+scripts/uctblextstorage/terraform/terraform.tfstate
+scripts/uctblextstorage/terraform/terraform.tfstate.*
+scripts/uctblextstorage/terraform/crash.log
+scripts/uctblextstorage/terraform/*.auto.tfvars
+scripts/uctblextstorage/terraform/.env
 
 # Local-only notebooks (secrets); never commit
 notebooks/otel/grafana/secrets-bootstrap.local.ipynb
