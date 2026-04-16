@@ -840,3 +840,76 @@ def print_metrics(
         print(f"    4a ({singles.singles_n} singles) {ms_row_4a:.1f} wall amortized ms/row")
         print(f"    4b (1 batch of {batch.batch_n} rows) {ms_row_4b:.3f} wall amortized ms/row")
         print(f"    4a/4b = ~{ratio:.1f}x lower ms/row")
+
+
+def to_csv_row(
+    protocol: str,
+    iteration: int,
+    n: int,
+    singles: SinglesResult,
+    batch: BatchResult,
+    vis: VisibilityResult,
+) -> dict:
+    """Flatten one benchmark run into a dict suitable for a CSV row.
+
+    All time values are in milliseconds.  None → empty string in the CSV.
+    """
+
+    def ms(v: Optional[float]) -> str:
+        return "" if v is None else f"{v * 1000:.3f}"
+
+    def ms_list_stat(lst: list[float], stat) -> str:
+        return ms(stat(lst)) if lst else ""
+
+    row: dict = {
+        "protocol":   protocol,
+        "iteration":  iteration,
+        "n_rows":     n,
+        # ── singles (4a) ───────────────────────────────────────────────
+        "single_rows":           singles.singles_n,
+        "single_send_min_ms":    ms_list_stat(singles.row_send_seconds, min),
+        "single_send_mean_ms":   ms_list_stat(singles.row_send_seconds, mean),
+        "single_send_median_ms": ms_list_stat(singles.row_send_seconds, median),
+        "single_send_max_ms":    ms_list_stat(singles.row_send_seconds, max),
+        "single_ack_min_ms":     ms_list_stat(singles.row_wait_seconds, min),
+        "single_ack_mean_ms":    ms_list_stat(singles.row_wait_seconds, mean),
+        "single_ack_median_ms":  ms_list_stat(singles.row_wait_seconds, median),
+        "single_ack_max_ms":     ms_list_stat(singles.row_wait_seconds, max),
+        "single_total_min_ms":   ms_list_stat(singles.row_ack_seconds, min),
+        "single_total_mean_ms":  ms_list_stat(singles.row_ack_seconds, mean),
+        "single_total_median_ms": ms_list_stat(singles.row_ack_seconds, median),
+        "single_total_max_ms":   ms_list_stat(singles.row_ack_seconds, max),
+        # ── batch (4b) ─────────────────────────────────────────────────
+        "batch_rows":            batch.batch_n,
+        "batch_wall_ms":         ms(batch.batch_ack_s),
+        "batch_ms_per_row":      ms((batch.batch_ack_s / batch.batch_n) if batch.batch_ack_s and batch.batch_n else None),
+        "batch_send_ms":         ms(batch.batch_send_s),
+        "batch_wait_ms":         ms(batch.batch_wait_s),
+        # ── stream overhead (gRPC only) ─────────────────────────────────
+        "stream_open_ms":        ms(batch.stream_open_s),
+        "stream_close_ms":       ms(batch.stream_close_s),
+        # ── UC visibility ───────────────────────────────────────────────
+        "visibility_ms":                    ms(vis.visibility_s),
+        "visibility_from_first_send_ms":    ms(vis.visibility_from_first_send_s),
+    }
+    return row
+
+
+def write_csv(rows: list[dict], path: str = "benchmark_results.csv") -> str:
+    """Write a list of to_csv_row dicts to *path* and return the CSV text.
+
+    If rows is empty, returns an empty string and skips writing.
+    """
+    import csv
+    import io
+
+    if not rows:
+        return ""
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+    writer.writeheader()
+    writer.writerows(rows)
+    text = buf.getvalue()
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        f.write(text)
+    return text
