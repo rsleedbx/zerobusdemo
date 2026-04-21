@@ -2,7 +2,7 @@
 # NOTE: databricks-connect is intentionally excluded.
 # The Databricks VS Code extension installs the correct version automatically
 # to match your cluster/runtime. Adding it here causes version mismatches.
-databricks-sdk>=0.20.0
+databricks-sdk[notebook]>=0.20.0
 
 # Protobuf / gRPC toolchain (zbhelper local imports)
 grpcio-tools>=1.60.0
