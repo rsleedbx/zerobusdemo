@@ -9,6 +9,7 @@
 !notebooks/zerobus_http_sync.ipynb
 !notebooks/zerobus_http_async.ipynb
 !notebooks/zerobus_benchmark_driver.ipynb
+!notebooks/zerobus_grpc_http.ipynb
 !notebooks/zbhelper/
 !notebooks/zbhelper/**
 notebooks/zbhelper/__pycache__/
